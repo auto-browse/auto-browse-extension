@@ -1,0 +1,53 @@
+{
+  "name": "auto-browse-extension",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "webpack --watch --mode development",
+    "build": "npm run generate-icons && webpack --mode production",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "generate-icons": "node scripts/generate-icons.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Chrome extension with side panel for automated browser interactions",
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.10",
+    "@types/chrome": "^0.0.304",
+    "@types/node": "^22.13.4",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "autoprefixer": "^10.4.20",
+    "copy-webpack-plugin": "^12.0.2",
+    "css-loader": "^7.1.2",
+    "devtools-protocol": "^0.0.1422344",
+    "postcss": "^8.5.3",
+    "postcss-loader": "^8.1.1",
+    "postcss-nesting": "^13.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sharp": "^0.33.5",
+    "style-loader": "^4.0.0",
+    "tailwindcss": "^3.4.1",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.7.3",
+    "webpack": "^5.98.0",
+    "webpack-cli": "^6.0.1"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^4.1.0",
+    "@radix-ui/react-dialog": "^1.1.6",
+    "@radix-ui/react-label": "^2.1.2",
+    "@radix-ui/react-slot": "^1.1.2",
+    "@radix-ui/react-toast": "^1.2.6",
+    "@types/uuid": "^10.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.475.0",
+    "react-icons": "^5.5.0",
+    "tailwind-merge": "^3.0.1",
+    "uuid": "^11.1.0"
+  }
+}
