@@ -203,10 +203,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 });
 
-async function handleScreenshot(tabId: number): Promise<{ screenshotUrl: string; }> {
+// Add helper to get active tab ID
+async function getActiveTabId(): Promise<number> {
+    return new Promise((resolve, reject) => {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs && tabs.length > 0 && tabs[0].id != null)
+            {
+                resolve(tabs[0].id);
+            } else
+            {
+                reject(new Error("No active tab found"));
+            }
+        });
+    });
+}
+
+async function handleScreenshot(tabId?: number): Promise<{ screenshotUrl: string; }> {
     if (!tabId)
     {
-        throw new Error("No active tab found");
+        tabId = await getActiveTabId();
     }
 
     try
@@ -237,17 +252,8 @@ async function handleScreenshot(tabId: number): Promise<{ screenshotUrl: string;
             );
         });
 
-        // Convert base64 to blob URL
-        const byteCharacters = atob(result.data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++)
-        {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: "image/png" });
-        const screenshotUrl = URL.createObjectURL(blob);
-
+        // Return a data URL instead of using URL.createObjectURL
+        const screenshotUrl = `data:image/png;base64,${result.data}`;
         return { screenshotUrl };
     } catch (error)
     {

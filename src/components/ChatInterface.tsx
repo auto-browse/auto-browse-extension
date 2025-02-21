@@ -38,6 +38,7 @@ export const ChatInterface: React.FC = () => {
             if (input.toLowerCase().includes("screenshot")) {
                 // Message background script to take screenshot
                 const response = await chrome.runtime.sendMessage({ type: "takeScreenshot" });
+                console.log("Screenshot response:", response);  // Added debugging
 
                 const systemMessage: ChatMessage = {
                     id: uuidv4(),
