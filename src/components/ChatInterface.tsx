@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { FiSend } from "react-icons/fi";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { ChatMessage } from "@/types/chat";
+import { ChatMessage, ElementType, DOMElementInfo } from "@/types/chat";
 import { v4 as uuidv4 } from "uuid";
 
 export const ChatInterface: React.FC = () => {
@@ -19,15 +19,88 @@ export const ChatInterface: React.FC = () => {
         scrollToBottom();
     }, [messages]);
 
+    const parseCommand = (input: string): ChatMessage['command'] => {
+        const text = input.toLowerCase();
+        if (text.includes("screenshot")) {
+            return { type: "screenshot" };
+        }
+
+        if (text.includes("find") || text.includes("show") || text.includes("get")) {
+            if (text.includes("clickable") || text.includes("interactive")) {
+                return { type: "find", target: "interactive" };
+            }
+            if (text.includes("shadow")) {
+                return { type: "find", target: "shadow" };
+            }
+            if (text.includes("frame") || text.includes("iframe")) {
+                return { type: "find", target: "iframe" };
+            }
+            if (text.includes("file") || text.includes("upload")) {
+                return { type: "find", target: "file" };
+            }
+            if (text.includes("text near")) {
+                const match = input.match(/text near\s+(.+)/i);
+                return {
+                    type: "find",
+                    target: "text",
+                    query: match?.[1] || ""
+                };
+            }
+            return { type: "find", target: "interactive" }; // Default to interactive elements
+        }
+
+        return { type: "help" };
+    };
+
+    const formatElementInfo = (element: DOMElementInfo): string => {
+        let result = "";
+
+        // Format based on element type
+        if (element.type === "interactive" || element.type === "file") {
+            const attrs = element.attributes || {};
+            const xpath = element.xpath || "unknown";
+            result += `${element.highlightIndex !== undefined ? element.highlightIndex + '[:] ' : ''}`;
+            result += `<${attrs['tagName'] || 'element'}`;
+
+            ['id', 'class', 'role', 'aria-label', 'type'].forEach(attr => {
+                if (attrs[attr]) {
+                    result += ` ${attr}="${attrs[attr]}"`;
+                }
+            });
+
+            result += ">";
+            if (element.text) {
+                result += ` ${element.text}`;
+            }
+            result += `\n   XPath: ${xpath}\n`;
+        } else if (element.type === "shadow") {
+            result += `Shadow DOM Host: ${element.xpath || "unknown"}\n`;
+            if (element.attributes?.['tagName']) {
+                result += `   Type: ${element.attributes['tagName']}\n`;
+            }
+        } else if (element.type === "iframe") {
+            result += `IFrame: ${element.xpath || "unknown"}\n`;
+            if (element.attributes?.['src']) {
+                result += `   Source: ${element.attributes['src']}\n`;
+            }
+        }
+
+        return result;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!input.trim() || isProcessing) return;
+
+        const parsedCommand = parseCommand(input);
+        if (!parsedCommand) return;
 
         const userMessage: ChatMessage = {
             id: uuidv4(),
             content: input,
             type: "user",
             timestamp: new Date(),
+            command: parsedCommand
         };
 
         setMessages((prev) => [...prev, userMessage]);
@@ -35,11 +108,8 @@ export const ChatInterface: React.FC = () => {
         setIsProcessing(true);
 
         try {
-            if (input.toLowerCase().includes("screenshot")) {
-                // Message background script to take screenshot
+            if (parsedCommand.type === "screenshot") {
                 const response = await chrome.runtime.sendMessage({ type: "takeScreenshot" });
-                console.log("Screenshot response:", response);  // Added debugging
-
                 const systemMessage: ChatMessage = {
                     id: uuidv4(),
                     content: "Screenshot taken successfully",
@@ -48,26 +118,52 @@ export const ChatInterface: React.FC = () => {
                     image: response.screenshotUrl
                 };
                 setMessages((prev) => [...prev, systemMessage]);
-            } else if (input.toLowerCase().includes("show elements") || input.toLowerCase().includes("get elements")) {
-                // Message content script to get DOM elements
+            }
+            else if (parsedCommand.type === "find") {
                 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-                const response = await chrome.tabs.sendMessage(tab.id!, { type: "traverseDOM" });
+                const response = await chrome.tabs.sendMessage(tab.id!, {
+                    type: "traverseDOM",
+                    target: parsedCommand.target || "interactive",
+                    query: parsedCommand.query
+                });
 
                 if (response.error) {
                     throw new Error(response.error);
                 }
 
+                let content = "";
+                if (response.elements) {
+                    content = response.elements
+                        .map((el: DOMElementInfo) => formatElementInfo(el))
+                        .join("\n");
+                    if (!content) {
+                        content = `No ${parsedCommand.target || "interactive"} elements found.`;
+                    } else {
+                        content = `Found ${response.elements.length} ${parsedCommand.target || "interactive"} elements:\n\n${content}`;
+                    }
+                } else {
+                    content = response.data || "No elements found.";
+                }
+
                 const systemMessage: ChatMessage = {
                     id: uuidv4(),
-                    content: response.data,
+                    content,
                     type: "system",
-                    timestamp: new Date()
+                    timestamp: new Date(),
+                    elements: response.elements
                 };
                 setMessages((prev) => [...prev, systemMessage]);
-            } else {
+            }
+            else {
                 const systemMessage: ChatMessage = {
                     id: uuidv4(),
-                    content: "Command received. Available commands:\n- Take a screenshot\n- Show elements",
+                    content: `Available commands:
+- Find clickable elements
+- Find shadow DOM elements
+- Find iframe contents
+- Find file inputs
+- Find text near [element]
+- Take a screenshot`,
                     type: "system",
                     timestamp: new Date()
                 };
@@ -103,13 +199,64 @@ export const ChatInterface: React.FC = () => {
                                     : "bg-secondary text-secondary-foreground"
                             }`}
                         >
-                            <p>{message.content}</p>
+                            <p className="whitespace-pre-wrap">{message.content}</p>
                             {message.image && (
                                 <img
                                     src={message.image}
                                     alt="Screenshot"
                                     className="mt-2 rounded-md max-w-full"
                                 />
+                            )}
+                            {message.elements && message.elements.length > 0 && (
+                                <div className="mt-2 space-y-2">
+                                    {message.elements.map((element, idx) => (
+                                        <div
+                                            key={idx}
+                                            className={`p-2 rounded ${
+                                                element.isShadowHost
+                                                    ? "bg-purple-100 dark:bg-purple-900"
+                                                    : element.type === "file"
+                                                    ? "bg-green-100 dark:bg-green-900"
+                                                    : element.type === "iframe"
+                                                    ? "bg-blue-100 dark:bg-blue-900"
+                                                    : "bg-gray-100 dark:bg-gray-800"
+                                            }`}
+                                        >
+                                            <div className="text-sm font-mono">
+                                                {element.xpath && (
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                        XPath: {element.xpath}
+                                                    </div>
+                                                )}
+                                                {element.text && (
+                                                    <div className="mt-1">{element.text}</div>
+                                                )}
+                                                {element.attributes && (
+                                                    <div className="mt-1 text-xs">
+                                                        {Object.entries(element.attributes)
+                                                            .filter(([key]) =>
+                                                                [
+                                                                    "id",
+                                                                    "class",
+                                                                    "role",
+                                                                    "type",
+                                                                    "src",
+                                                                ].includes(key)
+                                                            )
+                                                            .map(([key, value]) => (
+                                                                <span
+                                                                    key={key}
+                                                                    className="inline-block mr-2"
+                                                                >
+                                                                    {key}="{value}"
+                                                                </span>
+                                                            ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             )}
                             <span className="text-xs opacity-70 mt-1 block">
                                 {message.timestamp.toLocaleTimeString()}
