@@ -1,4 +1,5 @@
-import { BrowserState, StateCommand } from "./state";
+import { BrowserState, StateCommand, TabInfo } from "./state";
+export type { StateCommand, TabInfo } from "./state";
 
 // Message types
 export type ElementType = 'interactive' | 'shadow' | 'iframe' | 'file' | 'text';
@@ -31,6 +32,7 @@ export interface DOMResponse {
     elements?: DOMElementInfo[];
     domTree?: any;
     error?: string;
+    data?: string;
 }
 
 export interface ScreenshotResponse {
