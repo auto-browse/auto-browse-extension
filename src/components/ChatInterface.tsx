@@ -47,10 +47,26 @@ export const ChatInterface: React.FC = () => {
                     image: response.screenshotUrl
                 };
                 setMessages((prev) => [...prev, systemMessage]);
+            } else if (input.toLowerCase().includes("show elements") || input.toLowerCase().includes("get elements")) {
+                // Message content script to get DOM elements
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                const response = await chrome.tabs.sendMessage(tab.id!, { type: "traverseDOM" });
+
+                if (response.error) {
+                    throw new Error(response.error);
+                }
+
+                const systemMessage: ChatMessage = {
+                    id: uuidv4(),
+                    content: response.data,
+                    type: "system",
+                    timestamp: new Date()
+                };
+                setMessages((prev) => [...prev, systemMessage]);
             } else {
                 const systemMessage: ChatMessage = {
                     id: uuidv4(),
-                    content: "Command received, but not a screenshot request",
+                    content: "Command received. Available commands:\n- Take a screenshot\n- Show elements",
                     type: "system",
                     timestamp: new Date()
                 };
