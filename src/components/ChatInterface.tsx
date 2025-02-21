@@ -3,6 +3,7 @@ import { FiSend } from "react-icons/fi";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { ChatMessage, ElementType, DOMElementInfo } from "@/types/chat";
+import { StateCommand, TabInfo, ViewportState, BrowserState } from "@/types/state";
 import { v4 as uuidv4 } from "uuid";
 
 export const ChatInterface: React.FC = () => {
@@ -23,6 +24,38 @@ export const ChatInterface: React.FC = () => {
         const text = input.toLowerCase();
         if (text.includes("screenshot")) {
             return { type: "screenshot" };
+        }
+
+        if (text.includes("state")) {
+            if (text.includes("viewport")) {
+                return { type: "state", command: { type: "showViewport" } };
+            }
+            if (text.includes("tabs")) {
+                return { type: "state", command: { type: "showTabs" } };
+            }
+            return { type: "state", command: { type: "showState" } };
+        }
+
+        if (text.includes("switch") && text.includes("tab")) {
+            const target = input.replace(/switch\s+tab\s+/i, "").trim();
+            const targetId = parseInt(target);
+            return {
+                type: "state",
+                command: {
+                    type: "switchTab",
+                    target: isNaN(targetId) ? target : targetId
+                }
+            };
+        }
+
+        if (text.includes("scroll")) {
+            const target = text.match(/scroll\s+to\s+(.+)/i)?.[1];
+            if (target) {
+                return {
+                    type: "state",
+                    command: { type: "scrollTo", target }
+                };
+            }
         }
 
         if (text.includes("find") || text.includes("show") || text.includes("get")) {
@@ -49,7 +82,10 @@ export const ChatInterface: React.FC = () => {
             return { type: "find", target: "interactive" }; // Default to interactive elements
         }
 
-        return { type: "help" };
+        return {
+            type: "help",
+            command: { type: "showState" }
+        };
     };
 
     const formatElementInfo = (element: DOMElementInfo): string => {
@@ -103,80 +139,149 @@ export const ChatInterface: React.FC = () => {
             command: parsedCommand
         };
 
-        setMessages((prev) => [...prev, userMessage]);
+        setMessages(prev => [...prev, userMessage]);
         setInput("");
         setIsProcessing(true);
 
         try {
-            if (parsedCommand.type === "screenshot") {
-                const response = await chrome.runtime.sendMessage({ type: "takeScreenshot" });
-                const systemMessage: ChatMessage = {
-                    id: uuidv4(),
-                    content: "Screenshot taken successfully",
-                    type: "system",
-                    timestamp: new Date(),
-                    image: response.screenshotUrl
-                };
-                setMessages((prev) => [...prev, systemMessage]);
-            }
-            else if (parsedCommand.type === "find") {
-                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-                const response = await chrome.tabs.sendMessage(tab.id!, {
-                    type: "traverseDOM",
-                    target: parsedCommand.target || "interactive",
-                    query: parsedCommand.query
-                });
+            let response: {
+                error?: string;
+                state?: Partial<BrowserState>;
+                elements?: DOMElementInfo[];
+                data?: string;
+            };
 
-                if (response.error) {
-                    throw new Error(response.error);
-                }
-
-                let content = "";
-                if (response.elements) {
-                    content = response.elements
-                        .map((el: DOMElementInfo) => formatElementInfo(el))
-                        .join("\n");
-                    if (!content) {
-                        content = `No ${parsedCommand.target || "interactive"} elements found.`;
-                    } else {
-                        content = `Found ${response.elements.length} ${parsedCommand.target || "interactive"} elements:\n\n${content}`;
+            switch (parsedCommand.type) {
+                case "screenshot": {
+                    const screenshotResponse: { error?: string; screenshotUrl?: string } =
+                        await chrome.runtime.sendMessage({ type: "takeScreenshot" });
+                    if (screenshotResponse.error || !screenshotResponse.screenshotUrl) {
+                        throw new Error(screenshotResponse.error || "Failed to capture screenshot");
                     }
-                } else {
-                    content = response.data || "No elements found.";
+                    setMessages(prev => [...prev, {
+                        id: uuidv4(),
+                        content: "Screenshot captured",
+                        type: "system",
+                        timestamp: new Date(),
+                        image: screenshotResponse.screenshotUrl
+                    }]);
+                    break;
                 }
 
-                const systemMessage: ChatMessage = {
-                    id: uuidv4(),
-                    content,
-                    type: "system",
-                    timestamp: new Date(),
-                    elements: response.elements
-                };
-                setMessages((prev) => [...prev, systemMessage]);
-            }
-            else {
-                const systemMessage: ChatMessage = {
-                    id: uuidv4(),
-                    content: `Available commands:
+                case "state": {
+                    const [stateTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                    if (!stateTab?.id) {
+                        throw new Error("No active tab found");
+                    }
+
+                    response = await chrome.tabs.sendMessage(stateTab.id, {
+                        type: "state",
+                        command: parsedCommand.command
+                    });
+
+                    if (response.error) {
+                        throw new Error(response.error);
+                    }
+
+                    let stateContent = "";
+                    switch (parsedCommand.command?.type) {
+                        case "showViewport":
+                            stateContent = "Current viewport metrics:";
+                            break;
+                        case "showTabs":
+                            stateContent = "Open browser tabs:";
+                            break;
+                        case "showState":
+                            stateContent = "Current browser state:";
+                            break;
+                        case "scrollTo":
+                            stateContent = "Scrolled to element. New viewport position:";
+                            break;
+                        case "switchTab":
+                            stateContent = "Switched to tab. Updated tab list:";
+                            break;
+                        default:
+                            stateContent = "State updated:";
+                    }
+
+                    setMessages(prev => [...prev, {
+                        id: uuidv4(),
+                        content: stateContent,
+                        type: "system",
+                        timestamp: new Date(),
+                        state: response.state
+                    }]);
+                    break;
+                }
+
+                case "find": {
+                    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                    if (!tab.id) {
+                        throw new Error("No active tab found");
+                    }
+
+                    const domResponse = await chrome.tabs.sendMessage(tab.id, {
+                        type: "traverseDOM",
+                        target: parsedCommand.target || "interactive",
+                        query: parsedCommand.query
+                    });
+
+                    if (domResponse.error) {
+                        throw new Error(domResponse.error);
+                    }
+
+                    let content = "";
+                    if (domResponse.elements) {
+                        content = domResponse.elements
+                            .map((el: DOMElementInfo) => formatElementInfo(el))
+                            .join("\n");
+                        if (!content) {
+                            content = `No ${parsedCommand.target || "interactive"} elements found.`;
+                        } else {
+                            content = `Found ${domResponse.elements.length} ${parsedCommand.target || "interactive"} elements:\n\n${content}`;
+                        }
+                    } else {
+                        content = domResponse.data || "No elements found.";
+                    }
+
+                    setMessages(prev => [...prev, {
+                        id: uuidv4(),
+                        content,
+                        type: "system",
+                        timestamp: new Date(),
+                        elements: domResponse.elements
+                    }]);
+                    break;
+                }
+
+                case "help": {
+                    setMessages(prev => [...prev, {
+                        id: uuidv4(),
+                        content: `Available commands:
 - Find clickable elements
 - Find shadow DOM elements
 - Find iframe contents
 - Find file inputs
 - Find text near [element]
-- Take a screenshot`,
-                    type: "system",
-                    timestamp: new Date()
-                };
-                setMessages((prev) => [...prev, systemMessage]);
+- Take a screenshot
+- Show browser state
+- Show viewport info
+- Show open tabs
+- Switch tab [number/title]
+- Scroll to [element]`,
+                        type: "system",
+                        timestamp: new Date()
+                    }]);
+                    break;
+                }
             }
         } catch (error) {
-            const errorMessage: ChatMessage = {
+            setMessages(prev => [...prev, {
                 id: uuidv4(),
                 content: `Error: ${error instanceof Error ? error.message : "Unknown error occurred"}`,
                 type: "system",
                 timestamp: new Date()
-            };
-            setMessages((prev) => [...prev, errorMessage]);
+            }]);
         } finally {
             setIsProcessing(false);
         }
@@ -196,10 +301,51 @@ export const ChatInterface: React.FC = () => {
                             className={`max-w-[80%] rounded-lg p-3 ${
                                 message.type === "user"
                                     ? "bg-primary text-primary-foreground"
+                                    : message.state
+                                    ? "bg-muted text-muted-foreground"
                                     : "bg-secondary text-secondary-foreground"
                             }`}
                         >
                             <p className="whitespace-pre-wrap">{message.content}</p>
+                            {message.state?.viewport && (
+                                <div className="mt-2 p-2 bg-muted rounded">
+                                    <h4 className="font-semibold">Viewport Info</h4>
+                                    <div className="text-sm">
+                                        <p>Height: {message.state.viewport.height}px</p>
+                                        <p>Width: {message.state.viewport.width}px</p>
+                                        <p>Scroll: {message.state.viewport.pixelsAbove}px from top</p>
+                                        <p>{message.state.viewport.pixelsBelow}px remaining</p>
+                                    </div>
+                                </div>
+                            )}
+                            {message.state?.tabs && (
+                                <div className="mt-2 space-y-2">
+                                    <h4 className="font-semibold">Open Tabs</h4>
+                                    {message.state.tabs.map((tab: TabInfo) => (
+                                        <div
+                                            key={tab.pageId}
+                                            className="text-sm p-2 bg-muted rounded flex justify-between items-center"
+                                        >
+                                            <span className="truncate flex-1">{tab.title}</span>
+                                            <button
+                                                onClick={() => {
+                                                    const command: StateCommand = {
+                                                        type: "switchTab",
+                                                        target: tab.pageId
+                                                    };
+                                                    chrome.runtime.sendMessage({
+                                                        type: "state",
+                                                        command
+                                                    });
+                                                }}
+                                                className="ml-2 px-2 py-1 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+                                            >
+                                                Switch
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                             {message.image && (
                                 <img
                                     src={message.image}

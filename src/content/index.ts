@@ -1,66 +1,139 @@
 import { DOMElementNode, DOMTextNode } from "../types/dom";
-import { ElementType, DOMElementInfo } from "../types/chat";
-
-interface DOMTraversalResponse {
-    error?: string;
-    domTree?: any;
-}
-
-interface ContentScriptResponse {
-    success: boolean;
-    data?: string;
-    error?: string;
-    elements?: DOMElementInfo[];
-}
-
-interface DOMTraversalMessage {
-    type: "traverseDOM";
-    target?: ElementType;
-    query?: string;
-}
-
-interface ContentScriptMessage {
-    type: "contentScript" | "traverseDOM";
-    target?: ElementType;
-    query?: string;
-}
+import { ElementType, DOMElementInfo, StateResponse, DOMResponse, ScreenshotResponse } from "../types/chat";
+import { BrowserState, StateCommand } from "../types/state";
 
 // Listen for messages from the side panel
 chrome.runtime.onMessage.addListener((
-    message: ContentScriptMessage,
+    message: { type: string; target?: ElementType; query?: string; command?: StateCommand; },
     sender: chrome.runtime.MessageSender,
-    sendResponse: (response: ContentScriptResponse) => void
+    sendResponse: (response: { success: boolean; error?: string; state?: Partial<BrowserState>; elements?: DOMElementInfo[]; }) => void
 ) => {
-    if (message.type === "contentScript")
-    {
-        // Handle any content script specific actions here
-        sendResponse({ success: true });
-    }
-    else if (message.type === "traverseDOM")
-    {
-        // Forward the message to background script with target info
-        chrome.runtime.sendMessage({
-            type: "traverseDOM",
-            target: message.target,
-            query: message.query
-        }, (response: DOMTraversalResponse) => {
-            if (response.error)
+    const handleMessage = async () => {
+        try
+        {
+            switch (message.type)
             {
-                sendResponse({ success: false, error: response.error });
+                case "state": {
+                    if (!message.command)
+                    {
+                        sendResponse({ success: false, error: "No state command provided" });
+                        return;
+                    }
+
+                    const response = await chrome.runtime.sendMessage({
+                        type: "state",
+                        command: message.command
+                    }) as StateResponse;
+
+                    if (response.error)
+                    {
+                        sendResponse({ success: false, error: response.error });
+                    } else
+                    {
+                        sendResponse({ success: true, state: response.state });
+                    }
+                    break;
+                }
+
+                case "traverseDOM": {
+                    console.log('Content script sending traverseDOM message:', message);
+                    console.log('Content script sending traverseDOM message:', message);
+                    const responsePromise = new Promise<DOMResponse>((resolve) => {
+                        chrome.runtime.sendMessage({
+                            type: "traverseDOM",
+                            target: message.target,
+                            query: message.query
+                        }, (response) => {
+                            resolve(response as DOMResponse);
+                        });
+                    });
+                    const response = await responsePromise;
+                    console.log('Content script received DOM response:', response);
+                    if (response.error)
+                    {
+                        sendResponse({ success: false, error: response.error });
+                        return;
+                    }
+
+                    const domTree = response.domTree;
+                    if (!domTree)
+                    {
+                        sendResponse({ success: false, error: "No DOM tree received" });
+                        return;
+                    }
+                    const processedElements = processElements(
+                        domTree,
+                        message.target as ElementType,
+                        message.query
+                    );
+
+                    if (processedElements.length > 0)
+                    {
+                        sendResponse({
+                            success: true,
+                            elements: processedElements
+                        });
+                    } else
+                    {
+                        sendResponse({
+                            success: true,
+                            error: `No ${message.target || 'interactive'} elements found`
+                        });
+                    }
+
+                    if (response.error)
+                    {
+                        sendResponse({ success: false, error: response.error });
+                        return;
+                    }
+
+                    if (response.domTree)
+                    {
+                        // Process the DOM tree to extract elements
+                        const processedElements = processElements(
+                            response.domTree,
+                            message.target as ElementType,
+                            message.query
+                        );
+
+                        if (processedElements.length > 0)
+                        {
+                            sendResponse({
+                                success: true,
+                                elements: processedElements
+                            });
+                        } else
+                        {
+                            sendResponse({
+                                success: true,
+                                error: `No ${message.target || 'interactive'} elements found`
+                            });
+                        }
+                    } else
+                    {
+                        sendResponse({
+                            success: true,
+                            error: "No DOM data received"
+                        });
+                    }
+                    break;
+                }
+
+                default:
+                    sendResponse({ success: false, error: "Unknown message type" });
             }
-            else
-            {
-                // Process and filter elements based on target type
-                const elements = processElements(response.domTree, message.target, message.query);
-                sendResponse({
-                    success: true,
-                    elements
-                });
-            }
-        });
-        return true; // Will respond asynchronously
-    }
-    return true;
+        } catch (error)
+        {
+            console.error('Content script error:', error);
+            sendResponse({
+                success: false,
+                error: error instanceof Error ? error.message : "Unknown error occurred"
+            });
+        }
+    };
+
+    handleMessage();
+    return true; // Will respond asynchronously
 });
 
 interface DOMNode {

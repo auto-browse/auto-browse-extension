@@ -7,7 +7,9 @@
         "sidePanel",
         "tabs",
         "scripting",
-        "debugger"
+        "debugger",
+        "activeTab",
+        "webNavigation"
     ],
     "side_panel": {
         "default_path": "sidepanel.html"
