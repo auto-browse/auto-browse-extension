@@ -21,7 +21,7 @@ export const browserService = {
         return response;
     },
 
-    async findElements(target: ElementType, query?: string): Promise<DOMResponse> {
+    async findElements(target: ElementType, query?: string, detailed?: boolean): Promise<DOMResponse> {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tab.id)
         {
@@ -31,7 +31,8 @@ export const browserService = {
         const response = await chrome.tabs.sendMessage(tab.id, {
             type: "traverseDOM",
             target,
-            query
+            query,
+            detailed
         });
 
         if (response.error)

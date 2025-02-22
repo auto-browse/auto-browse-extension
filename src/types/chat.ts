@@ -16,7 +16,7 @@ export interface DOMElementInfo {
 // Command types
 export type MessageCommand =
     | { type: 'screenshot'; }
-    | { type: 'find'; target?: ElementType; query?: string; }
+    | { type: 'find'; target?: ElementType; query?: string; detailed?: boolean; }
     | { type: 'help'; command?: StateCommand; }
     | { type: 'state'; command: StateCommand; };
 

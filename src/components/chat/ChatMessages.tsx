@@ -64,7 +64,10 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
                             <div className="mt-1 text-xs">
                                 {Object.entries(element.attributes)
                                     .filter(([key]) =>
-                                        ["id", "class", "role", "type", "src"].includes(key)
+                                        [
+                                            ...elementService.getClickableElementAttributes(),
+                                            "id", "class", "src"
+                                        ].includes(key)
                                     )
                                     .map(([key, value]) => (
                                         <span key={key} className="inline-block mr-2">

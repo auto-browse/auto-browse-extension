@@ -62,14 +62,18 @@ export const useChatMessages = () => {
                 }
 
                 case "find": {
-                    const response = await browserService.findElements(command.target || "interactive", command.query);
+                    const response = await browserService.findElements(
+                        command.target || "interactive",
+                        command.query,
+                        command.detailed
+                    );
                     let content = "";
                     if (response.elements)
                     {
                         const count = response.elements.length;
                         content = count === 0
                             ? `No ${command.target || "interactive"} elements found.`
-                            : `Found ${count} ${command.target || "interactive"} elements:\n\n${response.elements}`;
+                            : `Found ${count} ${command.target || "interactive"} elements${command.detailed ? " with details" : ""}:\n\n${response.elements}`;
                     } else
                     {
                         content = response.data || "No elements found.";

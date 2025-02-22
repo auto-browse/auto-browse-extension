@@ -4,7 +4,7 @@ import { BrowserState, StateCommand } from "../types/state";
 
 // Listen for messages from the side panel
 chrome.runtime.onMessage.addListener((
-    message: { type: string; target?: ElementType; query?: string; command?: StateCommand; },
+    message: { type: string; target?: ElementType; query?: string; command?: StateCommand; detailed?: boolean; },
     sender: chrome.runtime.MessageSender,
     sendResponse: (response: { success: boolean; error?: string; state?: Partial<BrowserState>; elements?: DOMElementInfo[]; }) => void
 ) => {
@@ -37,12 +37,12 @@ chrome.runtime.onMessage.addListener((
 
                 case "traverseDOM": {
                     console.log('Content script sending traverseDOM message:', message);
-                    console.log('Content script sending traverseDOM message:', message);
                     const responsePromise = new Promise<DOMResponse>((resolve) => {
                         chrome.runtime.sendMessage({
                             type: "traverseDOM",
                             target: message.target,
-                            query: message.query
+                            query: message.query,
+                            detailed: message.detailed
                         }, (response) => {
                             resolve(response as DOMResponse);
                         });
@@ -64,7 +64,8 @@ chrome.runtime.onMessage.addListener((
                     const processedElements = processElements(
                         domTree,
                         message.target as ElementType,
-                        message.query
+                        message.query,
+                        message.detailed
                     );
 
                     if (processedElements.length > 0)
@@ -78,42 +79,6 @@ chrome.runtime.onMessage.addListener((
                         sendResponse({
                             success: true,
                             error: `No ${message.target || 'interactive'} elements found`
-                        });
-                    }
-
-                    if (response.error)
-                    {
-                        sendResponse({ success: false, error: response.error });
-                        return;
-                    }
-
-                    if (response.domTree)
-                    {
-                        // Process the DOM tree to extract elements
-                        const processedElements = processElements(
-                            response.domTree,
-                            message.target as ElementType,
-                            message.query
-                        );
-
-                        if (processedElements.length > 0)
-                        {
-                            sendResponse({
-                                success: true,
-                                elements: processedElements
-                            });
-                        } else
-                        {
-                            sendResponse({
-                                success: true,
-                                error: `No ${message.target || 'interactive'} elements found`
-                            });
-                        }
-                    } else
-                    {
-                        sendResponse({
-                            success: true,
-                            error: "No DOM data received"
                         });
                     }
                     break;
@@ -182,7 +147,8 @@ interface DOMNodeWithInteraction extends DOMNode {
 function processElements(
     domTree: DOMNodeWithInteraction,
     target: ElementType = "interactive",
-    query?: string
+    query?: string,
+    detailed: boolean = false
 ): DOMElementInfo[] {
     const elements: DOMElementInfo[] = [];
 
@@ -219,12 +185,12 @@ function processElements(
 
         if (shouldInclude)
         {
-            const element: DOMElementInfo = {
+            let element: DOMElementInfo = {
                 type: elementType,
                 highlightIndex: node.highlightIndex,
                 xpath: node.xpath,
                 attributes: node.attributes,
-                text: getAllTextUntilNextClickable(node, node),
+                text: detailed ? getAllTextUntilNextClickable(node, node) : undefined,
                 isShadowHost: node.shadowRoot
             };
             elements.push(element);

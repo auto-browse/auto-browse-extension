@@ -35,7 +35,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 
 // Message handler
 chrome.runtime.onMessage.addListener((
-    message: { type: string; target?: string; query?: string; command?: StateCommand; },
+    message: { type: string; target?: string; query?: string; command?: StateCommand; detailed?: boolean; },
     sender: chrome.runtime.MessageSender,
     sendResponse: (response: StateResponse | DOMResponse | ScreenshotResponse) => void
 ) => {
@@ -68,7 +68,7 @@ chrome.runtime.onMessage.addListener((
 
                 case "traverseDOM": {
                     console.log('Background script received traverseDOM message:', message);
-                    const result = await handleDOMTraversal(tabId, message.target, message.query);
+                    const result = await handleDOMTraversal(tabId, message.target, message.query, message.detailed);
                     console.log('Background script sending DOM tree:', result.domTree);
                     sendResponse({
                         success: result.domTree !== null,
@@ -197,7 +197,8 @@ async function attachDebugger(tabId: number): Promise<void> {
 async function handleDOMTraversal(
     tabId: number,
     target?: string,
-    query?: string
+    query?: string,
+    detailed?: boolean
 ): Promise<{ domTree: any; }> {
     if (!tabId)
     {

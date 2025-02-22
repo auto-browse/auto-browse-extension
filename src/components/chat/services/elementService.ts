@@ -1,6 +1,24 @@
 import { DOMElementInfo } from "@/types/chat";
 
+const CLICKABLE_ELEMENT_ATTRIBUTES = [
+    'title',
+    'type',
+    'name',
+    'role',
+    'tabindex',
+    'aria-label',
+    'placeholder',
+    'value',
+    'alt',
+    'aria-expanded',
+    'aria_name'
+];
+
 export const elementService = {
+    getClickableElementAttributes(): string[] {
+        return CLICKABLE_ELEMENT_ATTRIBUTES;
+    },
+
     formatElementInfo(element: DOMElementInfo): string {
         let result = "";
 
@@ -36,7 +54,7 @@ export const elementService = {
 
         result += `<${attrs["tagName"] || "element"}`;
 
-        ["id", "class", "role", "aria-label", "type"].forEach(attr => {
+        CLICKABLE_ELEMENT_ATTRIBUTES.concat(["id", "class"]).forEach(attr => {
             if (attrs[attr])
             {
                 result += ` ${attr}="${attrs[attr]}"`;

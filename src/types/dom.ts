@@ -1,11 +1,15 @@
 export interface DOMBaseNode {
     isVisible: boolean;
     parent?: DOMElementNode;
+
+    hasParentWithHighlightIndex?(): boolean;
 }
 
 export interface DOMTextNode extends DOMBaseNode {
     type: 'TEXT_NODE';
     text: string;
+
+    hasParentWithHighlightIndex(): boolean;
 }
 
 export interface DOMElementNode extends DOMBaseNode {
@@ -17,6 +21,9 @@ export interface DOMElementNode extends DOMBaseNode {
     isTopElement?: boolean;
     shadowRoot?: boolean;
     highlightIndex?: number;
+
+    getAllTextTillNextClickableElement(maxDepth?: number): string;
+    clickableElementsToString(includeAttributes?: string[]): string;
 }
 
 export interface DOMState {

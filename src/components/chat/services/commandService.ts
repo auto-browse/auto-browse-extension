@@ -51,7 +51,11 @@ export const commandService = {
         {
             if (text.includes("clickable") || text.includes("interactive"))
             {
-                return { type: "find", target: "interactive" as ElementType };
+                return {
+                    type: "find",
+                    target: "interactive" as ElementType,
+                    detailed: text.includes("detail") || text.includes("attributes")
+                };
             }
             if (text.includes("shadow"))
             {
@@ -86,6 +90,7 @@ export const commandService = {
     getAvailableCommands(): string {
         return `Available commands:
 - Find clickable elements
+- Find clickable elements with details
 - Find shadow DOM elements
 - Find iframe contents
 - Find file inputs
