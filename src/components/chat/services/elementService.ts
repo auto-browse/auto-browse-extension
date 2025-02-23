@@ -49,7 +49,7 @@ export const elementService = {
 
         if (element.highlightIndex !== undefined)
         {
-            result += `${element.highlightIndex}[:] `;
+            result += `${element.highlightIndex}[:]\n`;
         }
 
         result += `<${attrs["tagName"] || "element"}`;

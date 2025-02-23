@@ -54,12 +54,15 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
                     className={`p-2 rounded ${elementService.getElementClasses(element)}`}
                 >
                     <div className="text-sm font-mono">
+                        {element.highlightIndex !== undefined && (
+                            <div className="mb-1">{element.highlightIndex}[:]</div>
+                        )}
                         {element.xpath && (
                             <div className="text-xs text-gray-500 dark:text-gray-400">
                                 XPath: {element.xpath}
                             </div>
                         )}
-                        {element.text && <div className="mt-1">{element.text}</div>}
+                        {element.text && <div className="mt-1">Text: {element.text}</div>}
                         {element.attributes && (
                             <div className="mt-1 text-xs">
                                 {Object.entries(element.attributes)
