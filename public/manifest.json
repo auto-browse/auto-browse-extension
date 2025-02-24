@@ -9,7 +9,8 @@
         "scripting",
         "debugger",
         "activeTab",
-        "webNavigation"
+        "webNavigation",
+        "storage"
     ],
     "side_panel": {
         "default_path": "sidepanel.html"
@@ -17,6 +18,10 @@
     "background": {
         "service_worker": "background.js",
         "type": "module"
+    },
+    "options_ui": {
+        "page": "options.html",
+        "open_in_tab": true
     },
     "action": {
         "default_popup": "popup.html",
