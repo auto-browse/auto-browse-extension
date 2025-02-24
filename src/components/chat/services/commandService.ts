@@ -64,7 +64,11 @@ export const commandService = {
             }
             if (text.includes("shadow"))
             {
-                return { type: "find", target: "shadow" as ElementType };
+                return {
+                    type: "find",
+                    target: "shadow" as ElementType,
+                    detailed: text.includes("detail") || text.includes("attributes")
+                };
             }
             if (text.includes("frame") || text.includes("iframe"))
             {
@@ -97,6 +101,7 @@ export const commandService = {
 - Find clickable elements
 - Find clickable elements with details
 - Find shadow DOM elements
+- Find shadow DOM elements with details
 - Find iframe contents
 - Find file inputs
 - Find text near [element]

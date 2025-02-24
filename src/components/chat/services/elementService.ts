@@ -72,11 +72,34 @@ export const elementService = {
     },
 
     formatShadowElement(element: DOMElementInfo): string {
-        let result = `Shadow DOM Host: ${element.xpath || "unknown"}\n`;
-        if (element.attributes?.["tagName"])
+        const attrs = element.attributes || {};
+        const xpath = element.xpath || "unknown";
+        let result = "";
+
+        if (element.highlightIndex !== undefined)
         {
-            result += `   Type: ${element.attributes["tagName"]}\n`;
+            result += `${element.highlightIndex}[:]\n`;
         }
+
+        result += `<${attrs["tagName"] || "element"} shadowroot`;
+
+        // Add common attributes
+        CLICKABLE_ELEMENT_ATTRIBUTES.concat(["id", "class"]).forEach(attr => {
+            if (attrs[attr])
+            {
+                result += ` ${attr}="${attrs[attr]}"`;
+            }
+        });
+
+        result += ">";
+
+        // Show interactive elements count or text if available
+        if (element.text)
+        {
+            result += ` ${element.text}`;
+        }
+
+        result += `\n   XPath: ${xpath}\n`;
         return result;
     },
 

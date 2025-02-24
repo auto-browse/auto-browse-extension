@@ -122,8 +122,13 @@ interface DOMNode {
     type?: 'TEXT_NODE';
     text?: string;
     isVisible?: boolean;
-    children?: DOMNode[];
+    children?: DOMNodeWithInteraction[];
     highlightIndex?: number;
+    isInteractive?: boolean;
+    shadowRoot?: boolean;
+    tagName?: string;
+    xpath?: string;
+    attributes?: Record<string, string>;
 }
 
 function getAllTextUntilNextClickable(node: DOMNode, startNode: DOMNode): string {
@@ -153,13 +158,8 @@ function getAllTextUntilNextClickable(node: DOMNode, startNode: DOMNode): string
     return textParts.join(' ').trim();
 }
 
-interface DOMNodeWithInteraction extends DOMNode {
-    tagName?: string;
-    xpath?: string;
-    attributes?: Record<string, string>;
-    isInteractive?: boolean;
-    shadowRoot?: boolean;
-}
+// DOMNodeWithInteraction is now equivalent to DOMNode
+type DOMNodeWithInteraction = DOMNode;
 
 function processElements(
     domTree: DOMNodeWithInteraction,
@@ -179,8 +179,22 @@ function processElements(
                 shouldInclude = node.isInteractive || false;
                 break;
             case "shadow":
-                shouldInclude = node.shadowRoot || false;
-                elementType = "shadow";
+                if (node.shadowRoot)
+                {
+                    // Only include visible shadow hosts
+                    const isVisible = node.isVisible || false;
+                    shouldInclude = isVisible;
+                    elementType = "shadow";
+
+                    // Check for interactivity within shadow root
+                    if (node.children && node.children.length > 0)
+                    {
+                        const hasInteractiveChildren = node.children.some(child =>
+                            child.isInteractive || (child.shadowRoot && child.isVisible)
+                        );
+                        shouldInclude = shouldInclude && hasInteractiveChildren;
+                    }
+                }
                 break;
             case "iframe":
                 shouldInclude = node.tagName === "iframe";
@@ -206,10 +220,22 @@ function processElements(
                 type: elementType,
                 highlightIndex: node.highlightIndex,
                 xpath: node.xpath,
-                attributes: node.attributes,
+                attributes: detailed ? node.attributes : undefined,
                 text: detailed ? getAllTextUntilNextClickable(node, node) : undefined,
                 isShadowHost: node.shadowRoot
             };
+
+            // For shadow elements in detailed mode, include additional info about shadow root
+            if (elementType === "shadow" && detailed && node.children)
+            {
+                const interactiveChildren = node.children.filter(child =>
+                    child.isInteractive || (child.shadowRoot && child.isVisible)
+                );
+                if (interactiveChildren.length > 0)
+                {
+                    element.text = `Contains ${interactiveChildren.length} interactive elements`;
+                }
+            }
             elements.push(element);
         }
 
