@@ -18,7 +18,8 @@ export type MessageCommand =
     | { type: 'screenshot'; }
     | { type: 'find'; target?: ElementType; query?: string; detailed?: boolean; }
     | { type: 'help'; command?: StateCommand; }
-    | { type: 'state'; command: StateCommand; };
+    | { type: 'state'; command: StateCommand; }
+    | { type: 'aria-snapshot'; };
 
 // Response types
 export interface StateResponse {
@@ -41,6 +42,12 @@ export interface ScreenshotResponse {
     error?: string;
 }
 
+export interface AriaResponse {
+    success: boolean;
+    snapshot?: string;
+    error?: string;
+}
+
 // Chat message types
 export interface ChatMessage {
     id: string;
@@ -52,6 +59,7 @@ export interface ChatMessage {
     elements?: DOMElementInfo[];
     state?: Partial<BrowserState>;
     error?: string;
+    ariaSnapshot?: string;
 }
 
 export interface ChatState {

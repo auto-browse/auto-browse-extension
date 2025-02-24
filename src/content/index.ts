@@ -1,18 +1,35 @@
 import { DOMElementNode, DOMTextNode } from "../types/dom";
-import { ElementType, DOMElementInfo, StateResponse, DOMResponse, ScreenshotResponse } from "../types/chat";
+import { ElementType, DOMElementInfo, StateResponse, DOMResponse, ScreenshotResponse, AriaResponse } from "../types/chat";
+import { generateAriaTree, renderAriaTree } from "../asnap/ariaSnapshot";
 import { BrowserState, StateCommand } from "../types/state";
 
 // Listen for messages from the side panel
 chrome.runtime.onMessage.addListener((
     message: { type: string; target?: ElementType; query?: string; command?: StateCommand; detailed?: boolean; },
     sender: chrome.runtime.MessageSender,
-    sendResponse: (response: { success: boolean; error?: string; state?: Partial<BrowserState>; elements?: DOMElementInfo[]; }) => void
+    sendResponse: (response: { success: boolean; error?: string; state?: Partial<BrowserState>; elements?: DOMElementInfo[]; snapshot?: string; }) => void
 ) => {
     const handleMessage = async () => {
         try
         {
             switch (message.type)
             {
+                case "aria-snapshot": {
+                    try
+                    {
+                        const ariaTree = generateAriaTree(document.body);
+                        const snapshot = renderAriaTree(ariaTree.root, { mode: 'raw' });
+                        sendResponse({ success: true, snapshot });
+                    } catch (error)
+                    {
+                        sendResponse({
+                            success: false,
+                            error: error instanceof Error ? error.message : "Failed to generate ARIA snapshot"
+                        });
+                    }
+                    break;
+                }
+
                 case "state": {
                     if (!message.command)
                     {

@@ -24,6 +24,7 @@ export const useChatMessages = () => {
         state?: Partial<BrowserState>;
         elements?: DOMElementInfo[];
         image?: string;
+        ariaSnapshot?: string;
     }) => {
         const message: ChatMessage = {
             id: uuidv4(),
@@ -84,6 +85,17 @@ export const useChatMessages = () => {
 
                 case "help": {
                     addSystemMessage(commandService.getAvailableCommands());
+                    break;
+                }
+
+                case "aria-snapshot": {
+                    const response = await browserService.getAriaSnapshot();
+                    if (response.snapshot)
+                    {
+                        addSystemMessage("ARIA Snapshot of the current page:", {
+                            ariaSnapshot: response.snapshot
+                        });
+                    }
                     break;
                 }
             }

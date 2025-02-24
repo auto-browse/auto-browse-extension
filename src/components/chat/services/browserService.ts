@@ -1,4 +1,4 @@
-import { StateCommand, StateResponse, DOMResponse, ScreenshotResponse, ElementType } from "@/types/chat";
+import { StateCommand, StateResponse, DOMResponse, ScreenshotResponse, AriaResponse, ElementType } from "@/types/chat";
 
 export const browserService = {
     async executeStateCommand(command: StateCommand): Promise<StateResponse> {
@@ -79,5 +79,24 @@ export const browserService = {
             default:
                 return "State updated:";
         }
+    },
+
+    async getAriaSnapshot(): Promise<AriaResponse> {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab.id)
+        {
+            throw new Error("No active tab found");
+        }
+
+        const response = await chrome.tabs.sendMessage(tab.id, {
+            type: "aria-snapshot"
+        });
+
+        if (response.error)
+        {
+            throw new Error(response.error);
+        }
+
+        return response;
     }
 };

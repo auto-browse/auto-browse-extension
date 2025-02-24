@@ -113,6 +113,11 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
                                 className="mt-2 rounded-md max-w-full"
                             />
                         )}
+                        {message.ariaSnapshot && (
+                            <pre className="mt-2 p-2 bg-black/10 dark:bg-white/10 rounded-md text-xs font-mono whitespace-pre overflow-x-auto">
+                                {message.ariaSnapshot}
+                            </pre>
+                        )}
                         {message.elements && message.elements.length > 0 && renderElements(message.elements)}
                         <span className="text-xs opacity-70 mt-1 block">
                             {message.timestamp.toLocaleTimeString()}

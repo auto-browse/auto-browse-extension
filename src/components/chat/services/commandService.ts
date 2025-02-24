@@ -9,6 +9,11 @@ export const commandService = {
             return { type: "screenshot" };
         }
 
+        if (text.includes("aria") && text.includes("snapshot"))
+        {
+            return { type: "aria-snapshot" };
+        }
+
         if (text.includes("state"))
         {
             if (text.includes("viewport"))
@@ -100,6 +105,7 @@ export const commandService = {
 - Show viewport info
 - Show open tabs
 - Switch tab [number/title]
-- Scroll to [element]`;
+- Scroll to [element]
+- Get aria snapshot`;
     }
 };
