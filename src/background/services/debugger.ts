@@ -1,28 +1,84 @@
 import Protocol from "devtools-protocol";
+import { tabService } from "./tab";
 
 export class DebuggerService {
     private connections = new Map<number, chrome.debugger.Debuggee>();
+    private attachingDebuggers = new Map<number, Promise<void>>();
+
+    private isRestrictedUrl(url: string): boolean {
+        return (
+            url.startsWith("chrome://") ||
+            url.startsWith("chrome-extension://") ||
+            url.startsWith("devtools://") ||
+            url.startsWith("edge://")
+        );
+    }
+
+    private async notifyError(tabId: number, error: unknown) {
+        await chrome.runtime.sendMessage({
+            type: "debugger-error",
+            tabId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+    }
 
     async attach(tabId: number): Promise<void> {
-        const target: chrome.debugger.Debuggee = { tabId };
-
-        if (this.connections.has(tabId))
+        // If already attaching, wait for completion
+        if (this.attachingDebuggers.has(tabId))
         {
+            await this.attachingDebuggers.get(tabId);
             return;
         }
 
-        return new Promise((resolve, reject) => {
-            chrome.debugger.attach(target, "1.3", () => {
-                if (chrome.runtime.lastError)
+        const attachPromise = (async () => {
+            try
+            {
+                const url = await tabService.getCurrentUrl(tabId);
+                if (this.isRestrictedUrl(url))
                 {
-                    reject(chrome.runtime.lastError);
-                } else
-                {
-                    this.connections.set(tabId, target);
-                    resolve();
+                    console.log(`Skipping debugger attachment for restricted URL: ${url}`);
+                    return;
                 }
-            });
-        });
+
+                const target: chrome.debugger.Debuggee = { tabId };
+
+                if (!this.connections.has(tabId))
+                {
+                    await new Promise<void>((resolve, reject) => {
+                        chrome.debugger.attach(target, "1.3", () => {
+                            if (chrome.runtime.lastError)
+                            {
+                                reject(chrome.runtime.lastError);
+                            } else
+                            {
+                                this.connections.set(tabId, target);
+                                // Add small delay for debugger initialization
+                                setTimeout(resolve, 200);
+                            }
+                        });
+                    });
+                }
+            } catch (error)
+            {
+                console.error(`Failed to attach debugger to tab ${tabId}:`, error);
+                await this.notifyError(tabId, error);
+                throw error;
+            }
+        })();
+
+        this.attachingDebuggers.set(tabId, attachPromise);
+
+        try
+        {
+            await attachPromise;
+        } finally
+        {
+            this.attachingDebuggers.delete(tabId);
+        }
+    }
+
+    getConnectedTabs(): number[] {
+        return Array.from(this.connections.keys());
     }
 
     async detach(tabId: number): Promise<void> {
