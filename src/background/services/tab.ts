@@ -129,8 +129,23 @@ export class TabService {
         await chrome.tabs.update(targetTab.id, { active: true });
     }
 
-    getCurrentUrl(tabId: number): Promise<string> {
-        return chrome.tabs.get(tabId).then(tab => tab.url || 'about:blank');
+    async getCurrentUrl(tabId: number): Promise<string> {
+        try
+        {
+            const tab = await chrome.tabs.get(tabId);
+            // Handle new tab states
+            if (!tab.url ||
+                tab.url === "about:blank" ||
+                tab.url === "chrome://newtab/")
+            {
+                return "about:blank";
+            }
+            return tab.url;
+        } catch (error)
+        {
+            console.debug(`Error getting tab URL, assuming about:blank:`, error);
+            return "about:blank"; // Safe fallback
+        }
     }
 }
 

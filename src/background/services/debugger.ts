@@ -1,12 +1,20 @@
 import Protocol from "devtools-protocol";
 import { tabService } from "./tab";
 
+enum DebuggerErrorType {
+    RESTRICTED_URL = "RESTRICTED_URL",
+    CONNECTION_FAILED = "CONNECTION_FAILED",
+    COMMAND_FAILED = "COMMAND_FAILED"
+}
+
 export class DebuggerService {
     private connections = new Map<number, chrome.debugger.Debuggee>();
     private attachingDebuggers = new Map<number, Promise<void>>();
 
     private isRestrictedUrl(url: string): boolean {
         return (
+            !url || // Handle undefined/empty URLs
+            url === "about:blank" ||
             url.startsWith("chrome://") ||
             url.startsWith("chrome-extension://") ||
             url.startsWith("devtools://") ||
@@ -14,12 +22,30 @@ export class DebuggerService {
         );
     }
 
-    private async notifyError(tabId: number, error: unknown) {
-        await chrome.runtime.sendMessage({
-            type: "debugger-error",
-            tabId,
-            error: error instanceof Error ? error.message : String(error)
-        });
+    private async notifyError(tabId: number, error: unknown, type: DebuggerErrorType) {
+        // Only notify user for unexpected errors
+        if (type !== DebuggerErrorType.RESTRICTED_URL)
+        {
+            await chrome.runtime.sendMessage({
+                type: "debugger-error",
+                tabId,
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+
+        // Log based on error type
+        switch (type)
+        {
+            case DebuggerErrorType.RESTRICTED_URL:
+                console.debug(`[Debugger] Skipping restricted URL:`, error);
+                break;
+            case DebuggerErrorType.CONNECTION_FAILED:
+                console.error(`[Debugger] Connection failed:`, error);
+                break;
+            case DebuggerErrorType.COMMAND_FAILED:
+                console.error(`[Debugger] Command execution failed:`, error);
+                break;
+        }
     }
 
     async attach(tabId: number): Promise<void> {
@@ -36,7 +62,11 @@ export class DebuggerService {
                 const url = await tabService.getCurrentUrl(tabId);
                 if (this.isRestrictedUrl(url))
                 {
-                    console.log(`Skipping debugger attachment for restricted URL: ${url}`);
+                    await this.notifyError(
+                        tabId,
+                        `Skipping debugger attachment for restricted URL: ${url}`,
+                        DebuggerErrorType.RESTRICTED_URL
+                    );
                     return;
                 }
 
@@ -44,24 +74,41 @@ export class DebuggerService {
 
                 if (!this.connections.has(tabId))
                 {
-                    await new Promise<void>((resolve, reject) => {
-                        chrome.debugger.attach(target, "1.3", () => {
-                            if (chrome.runtime.lastError)
-                            {
-                                reject(chrome.runtime.lastError);
-                            } else
-                            {
-                                this.connections.set(tabId, target);
-                                // Add small delay for debugger initialization
-                                setTimeout(resolve, 200);
-                            }
+                    try
+                    {
+                        await new Promise<void>((resolve, reject) => {
+                            chrome.debugger.attach(target, "1.3", () => {
+                                if (chrome.runtime.lastError)
+                                {
+                                    reject(chrome.runtime.lastError);
+                                } else
+                                {
+                                    this.connections.set(tabId, target);
+                                    // Add small delay for debugger initialization
+                                    setTimeout(resolve, 200);
+                                }
+                            });
                         });
-                    });
+                    } catch (error)
+                    {
+                        await this.notifyError(
+                            tabId,
+                            error,
+                            DebuggerErrorType.CONNECTION_FAILED
+                        );
+                        throw error;
+                    }
                 }
             } catch (error)
             {
-                console.error(`Failed to attach debugger to tab ${tabId}:`, error);
-                await this.notifyError(tabId, error);
+                if (!this.isRestrictedUrl(await tabService.getCurrentUrl(tabId)))
+                {
+                    await this.notifyError(
+                        tabId,
+                        error,
+                        DebuggerErrorType.CONNECTION_FAILED
+                    );
+                }
                 throw error;
             }
         })();
@@ -96,35 +143,57 @@ export class DebuggerService {
         method: string,
         params?: any
     ): Promise<T> {
-        await this.attach(tabId);
-        const target = this.connections.get(tabId)!;
+        try
+        {
+            await this.attach(tabId);
+            const target = this.connections.get(tabId)!;
 
-        return new Promise((resolve, reject) => {
-            chrome.debugger.sendCommand(
-                target,
-                method,
-                params,
-                (result) => {
-                    if (chrome.runtime.lastError)
-                    {
-                        reject(chrome.runtime.lastError);
-                    } else
-                    {
-                        resolve(result as T);
+            return await new Promise((resolve, reject) => {
+                chrome.debugger.sendCommand(
+                    target,
+                    method,
+                    params,
+                    (result) => {
+                        if (chrome.runtime.lastError)
+                        {
+                            reject(chrome.runtime.lastError);
+                        } else
+                        {
+                            resolve(result as T);
+                        }
                     }
-                }
+                );
+            });
+        } catch (error)
+        {
+            await this.notifyError(
+                tabId,
+                error,
+                DebuggerErrorType.COMMAND_FAILED
             );
-        });
+            throw error;
+        }
     }
 
     async captureScreenshot(tabId: number): Promise<string> {
-        const result = await this.sendCommand<Protocol.Page.CaptureScreenshotResponse>(
-            tabId,
-            "Page.captureScreenshot",
-            { format: "png", quality: 100 }
-        );
+        try
+        {
+            const result = await this.sendCommand<Protocol.Page.CaptureScreenshotResponse>(
+                tabId,
+                "Page.captureScreenshot",
+                { format: "png", quality: 100 }
+            );
 
-        return `data:image/png;base64,${result.data}`;
+            return `data:image/png;base64,${result.data}`;
+        } catch (error)
+        {
+            await this.notifyError(
+                tabId,
+                error,
+                DebuggerErrorType.COMMAND_FAILED
+            );
+            throw error;
+        }
     }
 
     async executeScript<T>(tabId: number, script: string): Promise<T | null> {
@@ -142,7 +211,14 @@ export class DebuggerService {
             return result.result.value;
         } catch (error)
         {
-            console.error("Error executing script:", error);
+            if (!this.isRestrictedUrl(await tabService.getCurrentUrl(tabId)))
+            {
+                await this.notifyError(
+                    tabId,
+                    error,
+                    DebuggerErrorType.COMMAND_FAILED
+                );
+            }
             return null;
         }
     }
