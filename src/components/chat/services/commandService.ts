@@ -14,7 +14,7 @@ export const commandService = {
             return { type: "aria-snapshot" };
         }
 
-        if (text.includes("state"))
+        if (text.includes("state") || text.includes("viewport"))
         {
             if (text.includes("viewport"))
             {
