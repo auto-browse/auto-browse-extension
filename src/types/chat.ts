@@ -2,7 +2,7 @@ import { BrowserState, StateCommand, TabInfo } from "./state";
 export type { StateCommand, TabInfo } from "./state";
 
 // Message types
-export type ElementType = 'interactive' | 'shadow' | 'iframe' | 'file' | 'text';
+export type ElementType = 'interactive' | 'shadow' | 'iframe' | 'file' | 'text' | 'form-item' | 'button' | 'img' | 'container';
 
 export interface DOMElementInfo {
     type: ElementType;
@@ -19,7 +19,8 @@ export type MessageCommand =
     | { type: 'find'; target?: ElementType; query?: string; detailed?: boolean; }
     | { type: 'help'; command?: StateCommand; }
     | { type: 'state'; command: StateCommand; }
-    | { type: 'aria-snapshot'; };
+    | { type: 'aria-snapshot'; }
+    | { type: 'extract'; command: 'tree' | 'elements' | 'text'; };
 
 // Response types
 export interface StateResponse {

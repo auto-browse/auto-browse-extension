@@ -18,6 +18,7 @@ import { escapeRegExp, longestCommonSubstring, normalizeWhiteSpace } from './iso
 import type { AriaProps, AriaRegex, AriaRole, AriaTemplateNode, AriaTemplateRoleNode, AriaTemplateTextNode } from './isomorphic/ariaSnapshot';
 
 import { getElementComputedStyle } from './domUtils';
+import { getCachedBoundingRect, isElementVisible, isTopElement, isInViewport, getXPathTree } from './domCache';
 import * as roleUtils from './roleUtils';
 import { yamlEscapeKeyIfNeeded, yamlEscapeValueIfNeeded } from './yaml';
 
@@ -26,6 +27,15 @@ export type AriaNode = AriaProps & {
     name: string;
     children: (AriaNode | string)[];
     element: Element;
+    // Visual properties
+    rects?: DOMRect[];
+    xpath?: string;
+    inViewport?: boolean;
+    isScrollable?: boolean;
+    visualState?: {
+        isVisible: boolean;
+        isTopElement: boolean;
+    };
 };
 
 export type AriaSnapshot = {
@@ -47,6 +57,8 @@ export function generateAriaTree(rootElement: Element): AriaSnapshot {
         const id = snapshot.elements.size + 1;
         snapshot.elements.set(id, element);
         snapshot.ids.set(element, id);
+        // Initialize caching mechanism
+        getCachedBoundingRect(element);
     };
 
     addElement(rootElement);
@@ -87,7 +99,19 @@ export function generateAriaTree(rootElement: Element): AriaSnapshot {
         addElement(element);
         const childAriaNode = toAriaNode(element);
         if (childAriaNode)
+        {
+            // Add visual properties to ARIA node
+            const rects = Array.from(element.getClientRects());
+            childAriaNode.rects = rects;
+            childAriaNode.xpath = getXPathTree(element);
+            childAriaNode.inViewport = isInViewport(element);
+            childAriaNode.isScrollable = element instanceof HTMLElement && element.scrollHeight - element.clientHeight >= 1;
+            childAriaNode.visualState = {
+                isVisible: isElementVisible(element),
+                isTopElement: isTopElement(element)
+            };
             ariaNode.children.push(childAriaNode);
+        }
         processElement(childAriaNode || ariaNode, element, ariaChildren);
     };
 
@@ -366,6 +390,26 @@ export function renderAriaTree(ariaNode: AriaNode, options?: { mode?: 'raw' | 'r
             key += ` [pressed]`;
         if (ariaNode.selected === true)
             key += ` [selected]`;
+
+        // Add visual properties to the key
+        if (ariaNode.xpath)
+            key += ` [xpath=${JSON.stringify(ariaNode.xpath)}]`;
+        if (ariaNode.inViewport)
+            key += ` [inViewport]`;
+        if (ariaNode.isScrollable)
+            key += ` [scrollable]`;
+        if (ariaNode.visualState)
+        {
+            if (ariaNode.visualState.isVisible)
+                key += ` [visible]`;
+            if (ariaNode.visualState.isTopElement)
+                key += ` [topElement]`;
+        }
+        if (ariaNode.rects && ariaNode.rects.length)
+        {
+            const rect = ariaNode.rects[0];
+            key += ` [rect={x:${rect.x},y:${rect.y},w:${rect.width},h:${rect.height}}]`;
+        }
         if (options?.ids)
         {
             const id = options?.ids.get(ariaNode.element);

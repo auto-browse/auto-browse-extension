@@ -1,5 +1,5 @@
 import { DOMElementInfo, ElementType } from "../../types/chat";
-import { generateAriaTree, renderAriaTree } from "../../asnap/ariaSnapshot";
+import { generateAriaTree, renderAriaTree, type AriaNode } from "../../asnap/ariaSnapshot";
 
 interface DOMNode {
     type?: 'TEXT_NODE';

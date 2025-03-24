@@ -90,6 +90,22 @@ export const commandService = {
             return { type: "find", target: "interactive" as ElementType }; // Default to interactive elements
         }
 
+        if (text.includes("extract"))
+        {
+            if (text.includes("tree"))
+            {
+                return { type: "extract", command: "tree" };
+            }
+            if (text.includes("elements") || text.includes("position"))
+            {
+                return { type: "extract", command: "elements" };
+            }
+            if (text.includes("text"))
+            {
+                return { type: "extract", command: "text" };
+            }
+        }
+
         return {
             type: "help",
             command: { type: "showState" }
@@ -111,6 +127,9 @@ export const commandService = {
 - Show open tabs
 - Switch tab [number/title]
 - Scroll to [element]
-- Get aria snapshot`;
+- Get aria snapshot
+- Extract tree (get DOM tree structure)
+- Extract elements (get elements with position)
+- Extract text (get text representation)`;
     }
 };

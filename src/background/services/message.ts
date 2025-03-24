@@ -1,5 +1,6 @@
 import type { StateCommand } from "../../types/state";
 import type { StateResponse, DOMResponse, ScreenshotResponse } from "../../types/chat";
+import { webExtractTextWithPosition, webExtractNodeTree, webExtractNodeTreeAsString } from "../../../extractor";
 import { debuggerService } from "./debugger";
 import { tabService } from "./tab";
 import { domTraversalScript } from "../domTraversal";
@@ -13,7 +14,7 @@ export class MessageHandler {
             type: string;
             target?: string;
             query?: string;
-            command?: StateCommand;
+            command?: StateCommand | 'tree' | 'elements' | 'text';
             detailed?: boolean;
         },
         sender: chrome.runtime.MessageSender
@@ -31,8 +32,15 @@ export class MessageHandler {
                 case "traverseDOM":
                     return this.handleDOMTraversal(tabId, message);
 
+                case "extract":
+                    return this.handleExtract(tabId, {
+                        command: typeof message.command === 'string' ? message.command as 'tree' | 'elements' | 'text' : undefined
+                    });
+
                 case "state":
-                    return this.handleStateCommand(tabId, message);
+                    return this.handleStateCommand(tabId, {
+                        command: typeof message.command === 'object' ? message.command as StateCommand : undefined
+                    });
 
                 default:
                     return {
@@ -206,6 +214,70 @@ export class MessageHandler {
             return {
                 success: false,
                 error: error instanceof Error ? error.message : "Failed to handle state command"
+            };
+        }
+    }
+
+    /**
+     * Handles extraction requests using the extractor functions
+     */
+    private async handleExtract(
+        tabId: number,
+        message: { command?: 'tree' | 'elements' | 'text'; }
+    ): Promise<DOMResponse> {
+        try
+        {
+            // Get the document.body from the active tab
+            const result = await debuggerService.executeScript(
+                tabId,
+                `document.body`
+            );
+
+            if (!result)
+            {
+                return {
+                    success: false,
+                    error: "Could not access document body"
+                };
+            }
+
+            let data;
+            switch (message.command)
+            {
+                case "elements":
+                    data = await debuggerService.executeScript(
+                        tabId,
+                        `(${webExtractTextWithPosition.toString()})(document.body)`
+                    );
+                    break;
+                case "tree":
+                    data = await debuggerService.executeScript(
+                        tabId,
+                        `(${webExtractNodeTree.toString()})(document.body)`
+                    );
+                    break;
+                case "text":
+                    data = await debuggerService.executeScript(
+                        tabId,
+                        `(${webExtractNodeTreeAsString.toString()})(document.body)`
+                    );
+                    break;
+                default:
+                    return {
+                        success: false,
+                        error: "Invalid extract command"
+                    };
+            }
+
+            return {
+                success: true,
+                domTree: data
+            };
+        } catch (error)
+        {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : "Failed to extract"
             };
         }
     }
